@@ -1755,7 +1755,11 @@ userRouter.post(
           .slice(2, 10)}`;
 
         const totalAmount = roundToTwo(amounts.chargedAmount);
-        const totalAmountStr = totalAmount.toFixed(2);
+        // eSewa v2: integer amounts must NOT include trailing ".00".
+        // Prod environment validates amount format strictly; RC is permissive.
+        const totalAmountStr = Number.isInteger(totalAmount)
+          ? String(totalAmount)
+          : totalAmount.toFixed(2);
 
         // eSewa v2 signature: concatenate values in the exact order of signed_field_names
         // Format: "total_amount={value},transaction_uuid={value},product_code={value}"
@@ -1764,6 +1768,26 @@ userRouter.post(
           .createHmac("sha256", config.esewa.secretKey)
           .update(signaturePayload)
           .digest("base64");
+
+        console.log("[esewa-init] secretKeyLen:", config.esewa.secretKey.length);
+        console.log(
+          "[esewa-init] secretKeyHexHead:",
+          Buffer.from(config.esewa.secretKey).toString("hex").slice(0, 24)
+        );
+        console.log(
+          "[esewa-init] secretKeyHexTail:",
+          Buffer.from(config.esewa.secretKey).toString("hex").slice(-24)
+        );
+        console.log(
+          "[esewa-init] productCode:",
+          JSON.stringify(config.esewa.productCode)
+        );
+        console.log("[esewa-init] endpoint:", config.esewa.endpoint);
+        console.log("[esewa-init] chargedAmount:", amounts.chargedAmount);
+        console.log("[esewa-init] totalAmountStr:", totalAmountStr);
+        console.log("[esewa-init] transactionUuid:", transactionUuid);
+        console.log("[esewa-init] signaturePayload:", signaturePayload);
+        console.log("[esewa-init] signature:", signature);
 
         gatewayOrderId = transactionUuid;
         gatewayMeta = {
@@ -1957,9 +1981,12 @@ userRouter.post(
         });
       }
 
+      const verifyAmount = roundToTwo(payment.chargedAmount);
       const verificationPayload = {
         product_code: config.esewa.productCode,
-        total_amount: payment.chargedAmount.toFixed(2),
+        total_amount: Number.isInteger(verifyAmount)
+          ? String(verifyAmount)
+          : verifyAmount.toFixed(2),
         transaction_uuid: payment.gatewayOrderId,
       };
 

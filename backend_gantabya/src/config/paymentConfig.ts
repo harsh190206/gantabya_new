@@ -32,12 +32,12 @@ export const getPaymentConfig = () => {
       currency: "INR" as const,
     },
     esewa: {
-      merchantId: requireEnv("ESEWA_MERCHANT_ID"),
-      publicKey: requireEnv("ESEWA_PUBLIC_KEY"),
-      secretKey: requireEnv("ESEWA_SECRET_KEY"),
-      productCode: requireEnv("ESEWA_PRODUCT_CODE"),
-      successUrl: requireEnv("ESEWA_SUCCESS_URL"),
-      failureUrl: requireEnv("ESEWA_FAILURE_URL"),
+      merchantId: requireEnv("ESEWA_MERCHANT_ID").trim(),
+      publicKey: requireEnv("ESEWA_PUBLIC_KEY").trim(),
+      secretKey: requireEnv("ESEWA_SECRET_KEY").trim(),
+      productCode: requireEnv("ESEWA_PRODUCT_CODE").trim(),
+      successUrl: requireEnv("ESEWA_SUCCESS_URL").trim(),
+      failureUrl: requireEnv("ESEWA_FAILURE_URL").trim(),
       endpoint: requireEnv(
         "ESEWA_ENDPOINT",
         "https://epay.esewa.com.np/api/epay/main"
