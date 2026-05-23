@@ -22,15 +22,31 @@ console.log("Signature Payload:");
 console.log("  " + signaturePayload);
 console.log();
 
-// Generate signature
-const signature = crypto
+// Generate signature with RAW string key (current behavior)
+const signatureRaw = crypto
   .createHmac('sha256', secretKey)
   .update(signaturePayload)
   .digest('base64');
 
-console.log("Generated Signature:");
-console.log("  " + signature);
+console.log("Signature (raw-string key):");
+console.log("  " + signatureRaw);
+
+// Fallback: try base64-decoded key
+let signatureDecoded = "(skipped — key length not multiple of 4)";
+if (secretKey.length % 4 === 0) {
+  const decodedKey = Buffer.from(secretKey, "base64");
+  signatureDecoded = crypto
+    .createHmac("sha256", decodedKey)
+    .update(signaturePayload)
+    .digest("base64");
+}
+console.log("Signature (base64-decoded key):");
+console.log("  " + signatureDecoded);
+
+console.log("\nSecret key length:", secretKey.length, "| multiple of 4?", secretKey.length % 4 === 0);
 console.log();
+
+const signature = signatureRaw;
 
 console.log("Form Data to Send:");
 console.log({

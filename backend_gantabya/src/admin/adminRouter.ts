@@ -598,6 +598,7 @@ adminRouter.post("/reset-password", async (req, res): Promise<any> => {
 
 interface SeatGridInput {
   seatNumber: string; // "1", "2", "3", "" for empty
+  isFemale?: boolean;
 }
 
 interface ProcessedSeat {
@@ -607,6 +608,7 @@ interface ProcessedSeat {
   rowSpan: number;
   columnSpan: number;
   type: "SEATER" | "SLEEPER";
+  isFemale: boolean;
 }
 
 /**
@@ -649,7 +651,11 @@ function processGridToSeats(
       }
 
       if (horizontalSpan > 1) {
-        // Horizontal sleeper (2-4 cells wide)
+        // Horizontal sleeper (2-4 cells wide). Female if any spanned cell is marked.
+        let isFemale = !!currentCell.isFemale;
+        for (let c = col; c < col + horizontalSpan; c++) {
+          if (currentRow[c]?.isFemale) isFemale = true;
+        }
         seats.push({
           seatNumber: seatNum,
           row,
@@ -657,8 +663,8 @@ function processGridToSeats(
           rowSpan: 1,
           columnSpan: horizontalSpan,
           type: "SLEEPER",
+          isFemale,
         });
-        // Mark all spanned cells as processed
         for (let c = col; c < col + horizontalSpan; c++) {
           processed.add(`${level}-${row}-${c}`);
         }
@@ -679,6 +685,7 @@ function processGridToSeats(
           rowSpan: 2,
           columnSpan: 1,
           type: "SLEEPER",
+          isFemale: !!(currentCell.isFemale || belowCellObj?.isFemale),
         });
         processed.add(`${level}-${row}-${col}`);
         processed.add(`${level}-${row + 1}-${col}`);
@@ -693,6 +700,7 @@ function processGridToSeats(
         rowSpan: 1,
         columnSpan: 1,
         type: "SEATER",
+        isFemale: !!currentCell.isFemale,
       });
       processed.add(`${level}-${row}-${col}`);
     }
@@ -858,6 +866,7 @@ adminRouter.post(
               type: seat.type,
               level: lowerSeats.includes(seat) ? "LOWER" : "UPPER",
               isActive: true,
+              isFemale: seat.isFemale,
             })),
           });
 
@@ -964,6 +973,7 @@ adminRouter.get(
             columnSpan: s.columnSpan,
             type: s.type,
             isActive: s.isActive,
+            isFemale: s.isFemale,
           })),
           upperDeck: upperDeckSeats.map((s: any) => ({
             id: s.id,
@@ -974,6 +984,7 @@ adminRouter.get(
             columnSpan: s.columnSpan,
             type: s.type,
             isActive: s.isActive,
+            isFemale: s.isFemale,
           })),
         },
       });
@@ -2632,12 +2643,16 @@ adminRouter.get(
           })),
           totalBookings,
           totalRevenue,
-          bookings: bookingGroups.map((group) => ({
+          bookings: bookingGroups.map((group) => {
+            const firstPassenger = group.bookings.find(
+              (b) => b.passenger?.phone && b.passenger.phone.trim().length > 0
+            )?.passenger;
+            return {
             bookingId: group.id,
             passenger: {
-              name: group.user.name,
+              name: firstPassenger?.name || group.user.name,
               email: group.user.email,
-              phone: group.user.phone || "N/A",
+              phone: firstPassenger?.phone || group.user.phone || "N/A",
             },
             route: `${group.fromStop.name} → ${group.toStop.name}`,
             boardingPoint: group.boardingPoint?.name || group.fromStop.name,
@@ -2649,6 +2664,7 @@ adminRouter.get(
               passengerName: b.passenger?.name || "N/A",
               passengerAge: b.passenger?.age || null,
               passengerGender: b.passenger?.gender || null,
+              passengerPhone: b.passenger?.phone || null,
             })),
             seatCount: group.bookings.length,
             amount: group.totalPrice,
@@ -2657,7 +2673,8 @@ adminRouter.get(
             paymentMethod: group.payment?.method || "N/A",
             paymentStatus: group.payment?.status || "PENDING",
             bookedAt: group.createdAt,
-          })),
+            };
+          }),
         };
       });
 
@@ -4270,6 +4287,17 @@ adminRouter.post(
           });
 
           if (seats.length !== seatIds.length) throw new Error("One or more seats are invalid or inactive");
+
+          for (const seat of seats) {
+            if ((seat as any).isFemale) {
+              const pax = (passengers as any[]).find((p) => p.seatId === seat.id);
+              if (!pax || pax.gender !== "FEMALE") {
+                throw new Error(
+                  `Seat ${seat.seatNumber} is reserved for female passengers only.`
+                );
+              }
+            }
+          }
 
           const existingBookings = await tx.booking.findMany({
             where: {

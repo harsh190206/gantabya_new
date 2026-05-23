@@ -203,7 +203,11 @@ export async function generateTicketPDF(
       doc
         .fontSize(10)
         .fillColor("#e0e7ff") // Lighter indigo for subtitle
-        .text("Your Journey Partner", startX + logoSize + 15, 65);
+        .text(
+          `${ticketData.bus.name || "Bus"} • ${ticketData.bus.busNumber || "--"}`,
+          startX + logoSize + 15,
+          65
+        );
 
       // ==================== TICKET INFO BAR ====================
       let currentY = 120;

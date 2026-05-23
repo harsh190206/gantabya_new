@@ -97,6 +97,7 @@ enum LayoutType {
   TWO_TWO // 2+2 seating (4 seats per row)
   THREE_TWO // 3+2 seating (5 seats per row)
   FOUR_TWO // 4+2 seating (6 seats per row)
+  FOUR_FOUR // 4+4 seating (8 seats per row)
 }
 
 // ==================== STOP MODEL ====================
@@ -177,6 +178,7 @@ model Seat {
   type     SeatType // SEATER or SLEEPER
   level    SeatLevel // UPPER or LOWER
   isActive Boolean   @default(true) // For temporarily disabling seats
+  isFemale Boolean   @default(false) // Seat reserved for female passengers only
 
   bookings  Booking[]
   seatHolds SeatHold[] // Temporary holds for race condition prevention

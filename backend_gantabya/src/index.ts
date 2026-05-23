@@ -7,6 +7,7 @@ import { userRouter } from "./user/userRouter.js";
 import adminRouter from "./admin/adminRouter.js";
 import { superAdminRouter } from "./superadmin/superAdminRouter.js";
 import { startHoldCleanupJob } from "./cron/holdCleanupJob.js";
+import { startTripStatusJob } from "./cron/tripStatusJob.js";
 import type { Response, Request } from "express";
 import { PrismaClient } from "@prisma/client";
 export const prisma = new PrismaClient();
@@ -58,6 +59,9 @@ app.get("/", testFunction);
 
 // Start cleanup job for expired seat holds
 startHoldCleanupJob();
+
+// Auto-transition trip statuses (SCHEDULED → ONGOING → COMPLETED)
+startTripStatusJob();
 
 app.listen(3000, () => {
   console.log("server running on the port 3000");

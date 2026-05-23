@@ -304,6 +304,18 @@ const prepareBookingDetails = async (
     throw new Error("One or more seats are invalid or inactive");
   }
 
+  // Female-only seat enforcement
+  for (const seat of seats) {
+    if ((seat as any).isFemale) {
+      const pax = passengers.find((p: any) => p.seatId === seat.id);
+      if (!pax || pax.gender !== "FEMALE") {
+        throw new Error(
+          `Seat ${seat.seatNumber} is reserved for female passengers only.`
+        );
+      }
+    }
+  }
+
   const existingBookings = await client.booking.findMany({
     where: {
       tripId,
@@ -1476,6 +1488,7 @@ userRouter.get("/showbusinfo/:tripId", async (req, res): Promise<any> => {
       columnSpan: seat.columnSpan,
       type: seat.type,
       level: seat.level,
+      isFemale: seat.isFemale,
       isAvailable: !occupiedSeatIds.has(seat.id),
     }));
 

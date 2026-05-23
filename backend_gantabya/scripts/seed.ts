@@ -476,6 +476,255 @@ async function main() {
   });
   console.log('  ✅ Created discount offers: WELCOME10, FLAT100');
 
+  // ==================== 8. FEMALE-TEST BUS ====================
+  console.log('\n🚌 Creating female-test bus...');
+
+  await prisma.bus.deleteMany({ where: { busNumber: 'NP-02-FT-9999' } });
+
+  const femaleBus = await prisma.bus.create({
+    data: {
+      adminId: admin.id,
+      busNumber: 'NP-02-FT-9999',
+      name: 'female-test',
+      type: 'MIXED',
+      layoutType: 'TWO_TWO',
+      gridRows: 5,
+      gridColumns: 5, // wider grid so last row can hold 5 seats
+      totalSeats: 0,
+    },
+  });
+  console.log(`  ✅ Bus: ${femaleBus.name} (${femaleBus.busNumber})`);
+
+  await prisma.busAmenities.create({
+    data: {
+      busId: femaleBus.id,
+      hasWifi: true,
+      hasCharging: true,
+      hasAC: true,
+      hasRestroom: false,
+      hasBlanket: false,
+      hasWaterBottle: true,
+      hasSnacks: false,
+      hasTV: false,
+      description: 'Test bus showcasing female-only seats and new layout features.',
+    },
+  });
+
+  // Short Kathmandu → Pokhara route
+  const ftStops = [
+    {
+      name: 'Kathmandu (FT)',
+      city: 'Kathmandu',
+      state: 'Bagmati',
+      stopIndex: 0,
+      arrivalTime: null,
+      departureTime: '07:00',
+      dayOffset: 0,
+      returnArrivalTime: null,
+      returnDepartureTime: '15:00',
+      returnDayOffset: 0,
+      distanceFromOrigin: 0,
+      lowerSeaterPrice: 0,
+      lowerSleeperPrice: 0,
+      upperSleeperPrice: 0,
+      boardingPoints: [
+        { name: 'New Bus Park', time: '06:45', landmark: 'Gate 3', address: 'Gongabu' },
+      ],
+    },
+    {
+      name: 'Pokhara (FT)',
+      city: 'Pokhara',
+      state: 'Gandaki',
+      stopIndex: 1,
+      arrivalTime: '14:00',
+      departureTime: null,
+      dayOffset: 0,
+      returnArrivalTime: '22:00',
+      returnDepartureTime: null,
+      returnDayOffset: 0,
+      distanceFromOrigin: 200,
+      lowerSeaterPrice: 800,
+      lowerSleeperPrice: 1200,
+      upperSleeperPrice: 1000,
+      boardingPoints: [
+        { name: 'Tourist Bus Park', time: '14:00', landmark: 'Lakeside', address: 'Prithvi Chowk' },
+      ],
+    },
+  ];
+
+  for (const stopData of ftStops) {
+    const { boardingPoints, ...stop } = stopData;
+    await prisma.stop.create({
+      data: {
+        busId: femaleBus.id,
+        ...stop,
+        boardingPoints: {
+          create: boardingPoints.map((bp, idx) => ({
+            type: 'BOARDING',
+            name: bp.name,
+            time: bp.time,
+            landmark: bp.landmark,
+            address: bp.address,
+            pointOrder: idx,
+          })),
+        },
+      },
+    });
+  }
+  console.log('  ✅ Route: Kathmandu (FT) → Pokhara (FT)');
+
+  // SEAT LAYOUT — 5 rows × 5 cols
+  // Row 0: 4 SEATER (cols 0-3), col 4 empty.  F1 & F2 = female
+  // Row 1: 2 horizontal sleepers (col 0-1, col 2-3), col 4 empty
+  // Row 2: 4 SEATER (cols 0-3), col 4 empty. SEAT 8 = female
+  // Row 3: 2 SEATER (cols 0-1) + 1 horizontal sleeper (col 2-3), col 4 empty
+  // Row 4: 5 SEATER (cols 0-4) <-- last row 5 columns
+  const ftSeats: Array<{
+    seatNumber: string;
+    row: number;
+    column: number;
+    rowSpan: number;
+    columnSpan: number;
+    type: 'SEATER' | 'SLEEPER';
+    level: 'LOWER' | 'UPPER';
+    isFemale: boolean;
+  }> = [
+    // Row 0 — 4 seater, first two female
+    { seatNumber: '1', row: 0, column: 0, rowSpan: 1, columnSpan: 1, type: 'SEATER', level: 'LOWER', isFemale: true },
+    { seatNumber: '2', row: 0, column: 1, rowSpan: 1, columnSpan: 1, type: 'SEATER', level: 'LOWER', isFemale: true },
+    { seatNumber: '3', row: 0, column: 2, rowSpan: 1, columnSpan: 1, type: 'SEATER', level: 'LOWER', isFemale: false },
+    { seatNumber: '4', row: 0, column: 3, rowSpan: 1, columnSpan: 1, type: 'SEATER', level: 'LOWER', isFemale: false },
+    // Row 1 — 2 horizontal sleepers
+    { seatNumber: '5', row: 1, column: 0, rowSpan: 1, columnSpan: 2, type: 'SLEEPER', level: 'LOWER', isFemale: false },
+    { seatNumber: '6', row: 1, column: 2, rowSpan: 1, columnSpan: 2, type: 'SLEEPER', level: 'LOWER', isFemale: false },
+    // Row 2 — 4 seater, one female
+    { seatNumber: '7', row: 2, column: 0, rowSpan: 1, columnSpan: 1, type: 'SEATER', level: 'LOWER', isFemale: false },
+    { seatNumber: '8', row: 2, column: 1, rowSpan: 1, columnSpan: 1, type: 'SEATER', level: 'LOWER', isFemale: true },
+    { seatNumber: '9', row: 2, column: 2, rowSpan: 1, columnSpan: 1, type: 'SEATER', level: 'LOWER', isFemale: false },
+    { seatNumber: '10', row: 2, column: 3, rowSpan: 1, columnSpan: 1, type: 'SEATER', level: 'LOWER', isFemale: false },
+    // Row 3 — mix: 2 seater + 1 horizontal sleeper
+    { seatNumber: '11', row: 3, column: 0, rowSpan: 1, columnSpan: 1, type: 'SEATER', level: 'LOWER', isFemale: false },
+    { seatNumber: '12', row: 3, column: 1, rowSpan: 1, columnSpan: 1, type: 'SEATER', level: 'LOWER', isFemale: false },
+    { seatNumber: '13', row: 3, column: 2, rowSpan: 1, columnSpan: 2, type: 'SLEEPER', level: 'LOWER', isFemale: false },
+    // Row 4 — 5 seater (last row uses full width)
+    { seatNumber: '14', row: 4, column: 0, rowSpan: 1, columnSpan: 1, type: 'SEATER', level: 'LOWER', isFemale: false },
+    { seatNumber: '15', row: 4, column: 1, rowSpan: 1, columnSpan: 1, type: 'SEATER', level: 'LOWER', isFemale: false },
+    { seatNumber: '16', row: 4, column: 2, rowSpan: 1, columnSpan: 1, type: 'SEATER', level: 'LOWER', isFemale: false },
+    { seatNumber: '17', row: 4, column: 3, rowSpan: 1, columnSpan: 1, type: 'SEATER', level: 'LOWER', isFemale: false },
+    { seatNumber: '18', row: 4, column: 4, rowSpan: 1, columnSpan: 1, type: 'SEATER', level: 'LOWER', isFemale: false },
+  ];
+
+  for (const seat of ftSeats) {
+    await prisma.seat.create({
+      data: { busId: femaleBus.id, ...seat, isActive: true },
+    });
+  }
+  await prisma.bus.update({
+    where: { id: femaleBus.id },
+    data: { totalSeats: ftSeats.length },
+  });
+  console.log(`  ✅ Female-test seats: ${ftSeats.length} (${ftSeats.filter(s => s.isFemale).length} female-only)`);
+
+  // Trips for today + next 6 days
+  for (let i = 0; i < 7; i++) {
+    const tripDate = new Date(today);
+    tripDate.setDate(tripDate.getDate() + i);
+    await prisma.trip.upsert({
+      where: { busId_tripDate: { busId: femaleBus.id, tripDate } },
+      update: {},
+      create: { busId: femaleBus.id, tripDate, status: 'SCHEDULED' },
+    });
+  }
+  console.log('  ✅ Female-test trips: next 7 days');
+
+  // ==================== 9. SAMPLE BOOKING ON FEMALE-TEST ====================
+  console.log('\n🎫 Creating sample bookings on female-test...');
+
+  const ftTrip = await prisma.trip.findFirst({
+    where: { busId: femaleBus.id },
+    orderBy: { tripDate: 'asc' },
+  });
+  const ktm = await prisma.stop.findFirst({
+    where: { busId: femaleBus.id, stopIndex: 0 },
+    include: { boardingPoints: true },
+  });
+  const pkr = await prisma.stop.findFirst({
+    where: { busId: femaleBus.id, stopIndex: 1 },
+    include: { boardingPoints: true },
+  });
+
+  if (ftTrip && ktm && pkr && ktm.boardingPoints[0] && pkr.boardingPoints[0]) {
+    // Book seat 3 (regular seater) for MALE passenger
+    // Book seat 1 (female-only) for FEMALE passenger
+    const seat1 = await prisma.seat.findFirst({ where: { busId: femaleBus.id, seatNumber: '1' } });
+    const seat3 = await prisma.seat.findFirst({ where: { busId: femaleBus.id, seatNumber: '3' } });
+
+    if (seat1 && seat3) {
+      const fare = Math.abs(pkr.lowerSeaterPrice - ktm.lowerSeaterPrice) * 2; // 2 seats
+
+      const group = await prisma.bookingGroup.create({
+        data: {
+          userId: user.id,
+          tripId: ftTrip.id,
+          fromStopId: ktm.id,
+          toStopId: pkr.id,
+          boardingPointId: ktm.boardingPoints[0].id,
+          droppingPointId: pkr.boardingPoints[0].id,
+          totalPrice: fare,
+          finalPrice: fare,
+          discountAmount: 0,
+          status: 'CONFIRMED',
+        },
+      });
+
+      const b1 = await prisma.booking.create({
+        data: { groupId: group.id, tripId: ftTrip.id, seatId: seat1.id, status: 'CONFIRMED' },
+      });
+      await prisma.passenger.create({
+        data: {
+          bookingId: b1.id,
+          name: 'Sita Sharma',
+          age: 28,
+          gender: 'FEMALE',
+          phone: '9812345678',
+          email: 'sita.test@example.com',
+        },
+      });
+
+      const b3 = await prisma.booking.create({
+        data: { groupId: group.id, tripId: ftTrip.id, seatId: seat3.id, status: 'CONFIRMED' },
+      });
+      await prisma.passenger.create({
+        data: {
+          bookingId: b3.id,
+          name: 'Ram Bahadur',
+          age: 35,
+          gender: 'MALE',
+          phone: '9809876543',
+          email: 'ram.test@example.com',
+        },
+      });
+
+      await prisma.payment.create({
+        data: {
+          userId: user.id,
+          bookingGroupId: group.id,
+          method: 'ESEWA',
+          baseAmount: fare,
+          baseCurrency: 'NPR',
+          chargedAmount: fare,
+          chargedCurrency: 'NPR',
+          status: 'SUCCESS',
+          gatewayPaymentId: `SEED-${Date.now()}`,
+        },
+      });
+
+      console.log(`  ✅ Booking: Sita (FEMALE, seat 1) + Ram (MALE, seat 3) | phone shown in admin report`);
+    }
+  } else {
+    console.log('  ⚠️  Skipped sample booking — stops/trip missing');
+  }
+
   // ==================== SUMMARY ====================
   console.log('\n' + '='.repeat(50));
   console.log('🎉 SEED COMPLETED SUCCESSFULLY!');
@@ -502,6 +751,12 @@ async function main() {
   console.log('│ OFFERS                                          │');
   console.log('│ ├─ WELCOME10: 10% off (max NPR 200)             │');
   console.log('│ └─ FLAT100: NPR 100 off on orders > 1000        │');
+  console.log('├─────────────────────────────────────────────────┤');
+  console.log('│ FEMALE-TEST BUS (NP-02-FT-9999)                 │');
+  console.log('│ ├─ 5 rows × 5 cols, last row full 5 seats       │');
+  console.log('│ ├─ Female-only seats: 1, 2, 8                   │');
+  console.log('│ ├─ Mix of seater + horizontal sleeper           │');
+  console.log('│ └─ Sample booking: Sita (F,seat 1) + Ram (M,3)  │');
   console.log('└─────────────────────────────────────────────────┘');
   console.log('\n✨ You can now test the application!\n');
 }
