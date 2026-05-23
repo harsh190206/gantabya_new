@@ -9,6 +9,7 @@ interface SeatData {
   seatNumber: string;
   type: 'SEATER' | 'SLEEPER' | 'EMPTY';
   spanning?: boolean; // If this cell is part of a multi-cell sleeper
+  isFemale?: boolean; // Reserved for female passengers
 }
 
 interface Bus {
@@ -28,6 +29,7 @@ interface SeatFromBackend {
   columnSpan: number;
   type: 'SEATER' | 'SLEEPER';
   isActive: boolean;
+  isFemale?: boolean;
 }
 
 const SeatLayoutDesigner: React.FC = () => {
@@ -40,6 +42,7 @@ const SeatLayoutDesigner: React.FC = () => {
   const [upperDeckGrid, setUpperDeckGrid] = useState<SeatData[][]>([]);
   const [editingCell, setEditingCell] = useState<{row: number; col: number} | null>(null);
   const [inputValue, setInputValue] = useState('');
+  const [femaleMode, setFemaleMode] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -100,8 +103,8 @@ const SeatLayoutDesigner: React.FC = () => {
 
   const populateGridFromSeats = (grid: SeatData[][], seats: SeatFromBackend[]) => {
     seats.forEach(seat => {
-      const { row, column, rowSpan, columnSpan, seatNumber, type } = seat;
-      
+      const { row, column, rowSpan, columnSpan, seatNumber, type, isFemale } = seat;
+
       // Fill all cells occupied by this seat
       for (let r = row; r < row + rowSpan; r++) {
         for (let c = column; c < column + columnSpan; c++) {
@@ -110,6 +113,7 @@ const SeatLayoutDesigner: React.FC = () => {
               seatNumber,
               type,
               spanning: r !== row || c !== column, // First cell is main, others are spanning
+              isFemale: !!isFemale,
             };
           }
         }
@@ -120,6 +124,22 @@ const SeatLayoutDesigner: React.FC = () => {
   const handleCellClick = (row: number, col: number) => {
     const currentGrid = activeLevel === 'LOWER' ? [...lowerDeckGrid] : [...upperDeckGrid];
     const cell = currentGrid[row][col];
+
+    if (femaleMode) {
+      if (!cell.seatNumber) return;
+      const seatNumber = cell.seatNumber;
+      const newFemale = !cell.isFemale;
+      currentGrid.forEach((r, ri) =>
+        r.forEach((c, ci) => {
+          if (c.seatNumber === seatNumber) {
+            currentGrid[ri][ci] = { ...c, isFemale: newFemale };
+          }
+        })
+      );
+      if (activeLevel === 'LOWER') setLowerDeckGrid(currentGrid);
+      else setUpperDeckGrid(currentGrid);
+      return;
+    }
 
     // If cell already has a seat, start editing it
     if (cell.seatNumber && !cell.spanning) {
@@ -344,9 +364,13 @@ const SeatLayoutDesigner: React.FC = () => {
 
     try {
       // Backend expects grid in this exact format
+      const stripGrid = (g: SeatData[][]) =>
+        g.map((row) =>
+          row.map((c) => ({ seatNumber: c.seatNumber || '', isFemale: !!c.isFemale }))
+        );
       await api.post(`/admin/bus/${busId}/seats/layout`, {
-        lowerDeckGrid,
-        upperDeckGrid: countSeats(upperDeckGrid) > 0 ? upperDeckGrid : undefined,
+        lowerDeckGrid: stripGrid(lowerDeckGrid),
+        upperDeckGrid: countSeats(upperDeckGrid) > 0 ? stripGrid(upperDeckGrid) : undefined,
       });
 
       setSuccess('Seat layout saved successfully! Users can now book seats on this bus.');
@@ -372,12 +396,17 @@ const SeatLayoutDesigner: React.FC = () => {
 
   const getCellStyle = (cell: SeatData, row: number, col: number) => {
     const isEditing = editingCell && editingCell.row === row && editingCell.col === col;
-    
+
     if (cell.type === 'EMPTY') {
       return `border-2 border-dashed border-gray-300 bg-gray-50 hover:bg-gray-100 cursor-pointer ${isEditing ? 'ring-4 ring-blue-400' : ''}`;
-    } else if (cell.type === 'SEATER') {
+    }
+    if (cell.isFemale) {
+      return `border-2 border-pink-500 bg-pink-200 hover:bg-pink-300 cursor-pointer ${isEditing ? 'ring-4 ring-blue-400' : ''}`;
+    }
+    if (cell.type === 'SEATER') {
       return `border-2 border-blue-500 bg-blue-100 hover:bg-blue-200 cursor-pointer ${isEditing ? 'ring-4 ring-blue-400' : ''}`;
-    } else if (cell.type === 'SLEEPER') {
+    }
+    if (cell.type === 'SLEEPER') {
       return `border-2 border-purple-500 bg-purple-100 hover:bg-purple-200 cursor-pointer ${isEditing ? 'ring-4 ring-blue-400' : ''}`;
     }
     return '';
@@ -471,6 +500,26 @@ const SeatLayoutDesigner: React.FC = () => {
           </div>
         </div>
 
+        {/* Female Seat Mode */}
+        <div className="flex flex-col sm:flex-row gap-3 sm:items-center justify-between">
+          <button
+            onClick={() => setFemaleMode((v) => !v)}
+            className={`px-4 py-2 rounded-lg font-semibold border-2 flex items-center gap-2 transition ${
+              femaleMode
+                ? 'bg-pink-500 text-white border-pink-600'
+                : 'bg-white text-pink-600 border-pink-300 hover:bg-pink-50'
+            }`}
+          >
+            <FaFemale />
+            {femaleMode ? 'Female Mode ON — click seat to toggle' : 'Mark Female Seat'}
+          </button>
+          {femaleMode && (
+            <p className="text-xs text-pink-700 bg-pink-50 px-3 py-2 rounded-lg">
+              Pink seats reserved for female passengers. Click again to unmark.
+            </p>
+          )}
+        </div>
+
         {/* Deck Selector and Stats */}
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
           <div className="flex items-center space-x-2 bg-white rounded-lg shadow p-1">
@@ -545,6 +594,13 @@ const SeatLayoutDesigner: React.FC = () => {
                   <div className="w-12 h-12 border-2 border-purple-500 bg-purple-100 rounded flex items-center justify-center font-bold text-purple-700">3</div>
                 </div>
                 <span className="text-gray-700">Vertical Sleeper (Couple Seat)</span>
+              </div>
+              <div className="flex items-center space-x-3">
+                <div className="w-12 h-12 border-2 border-pink-500 bg-pink-200 rounded flex flex-col items-center justify-center">
+                  <FaFemale className="text-pink-600 text-base" />
+                  <span className="text-pink-700 font-bold text-[10px]">F</span>
+                </div>
+                <span className="text-gray-700">Female-only Seat</span>
               </div>
             </div>
           </div>
@@ -645,20 +701,28 @@ const SeatLayoutDesigner: React.FC = () => {
                                   <div className="flex flex-col items-center justify-center">
                                     {cell.type === 'SEATER' && (
                                       <>
-                                        <FaChair className="text-blue-600 text-sm sm:text-lg md:text-xl lg:text-2xl mb-0.5" />
-                                        <span className="text-blue-700 font-bold text-[0.55rem] sm:text-xs md:text-sm">{cell.seatNumber}</span>
+                                        {cell.isFemale ? (
+                                          <FaFemale className="text-pink-600 text-sm sm:text-lg md:text-xl lg:text-2xl mb-0.5" />
+                                        ) : (
+                                          <FaChair className="text-blue-600 text-sm sm:text-lg md:text-xl lg:text-2xl mb-0.5" />
+                                        )}
+                                        <span className={`${cell.isFemale ? 'text-pink-700' : 'text-blue-700'} font-bold text-[0.55rem] sm:text-xs md:text-sm`}>
+                                          {cell.isFemale ? `F-${cell.seatNumber}` : cell.seatNumber}
+                                        </span>
                                       </>
                                     )}
                                     {cell.type === 'SLEEPER' && (
                                       <>
-                                        <FaBed className="text-purple-600 text-sm sm:text-lg md:text-xl lg:text-2xl mb-0.5" />
+                                        <FaBed className={`${cell.isFemale ? 'text-pink-600' : 'text-purple-600'} text-sm sm:text-lg md:text-xl lg:text-2xl mb-0.5`} />
                                         {isCoupeSeat && (
                                           <div className="flex items-center gap-0.5 text-[8px] sm:text-[10px]">
                                             <FaMale className="text-blue-500" />
                                             <FaFemale className="text-pink-500" />
                                           </div>
                                         )}
-                                        <span className="text-purple-700 font-bold text-[0.55rem] sm:text-xs md:text-sm">{cell.seatNumber}</span>
+                                        <span className={`${cell.isFemale ? 'text-pink-700' : 'text-purple-700'} font-bold text-[0.55rem] sm:text-xs md:text-sm`}>
+                                          {cell.isFemale ? `F-${cell.seatNumber}` : cell.seatNumber}
+                                        </span>
                                       </>
                                     )}
                                   </div>

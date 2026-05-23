@@ -27,6 +27,7 @@ interface SeatInfo {
   passengerName: string;
   passengerAge: number | null;
   passengerGender: string | null;
+  passengerPhone?: string | null;
 }
 
 interface BookingInfo {
@@ -433,10 +434,19 @@ const AdminBookingsReport: React.FC = () => {
                                   Passenger
                                 </th>
                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                  Route
+                                  Phone
                                 </th>
                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                  Seats
+                                  City Route
+                                </th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                  Seat
+                                </th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                  Boarding
+                                </th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                  Dropping
                                 </th>
                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                   Amount
@@ -444,37 +454,39 @@ const AdminBookingsReport: React.FC = () => {
                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                   Payment
                                 </th>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                  Booked At
-                                </th>
                               </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
-                              {bus.bookings.map((booking) => (
-                                <tr key={booking.bookingId} className="hover:bg-gray-50">
-                                  <td className="px-4 py-4 whitespace-nowrap">
-                                    <div>
-                                      <p className="font-medium text-gray-900">{booking.passenger.name}</p>
-                                      <p className="text-sm text-gray-500">{booking.passenger.email}</p>
-                                      <p className="text-sm text-gray-500">{booking.passenger.phone}</p>
-                                    </div>
-                                  </td>
-                                  <td className="px-4 py-4">
-                                    <div>
-                                      <p className="font-medium text-gray-900">{booking.route}</p>
-                                      <p className="text-xs text-gray-500">
-                                        Boarding: {booking.boardingPoint}
-                                      </p>
-                                      <p className="text-xs text-gray-500">
-                                        Dropping: {booking.droppingPoint}
-                                      </p>
-                                    </div>
-                                  </td>
-                                  <td className="px-4 py-4">
-                                    <div className="flex flex-wrap gap-1">
-                                      {booking.seats.map((seat, idx) => (
+                              {bus.bookings.flatMap((booking) =>
+                                booking.seats.map((seat, sIdx) => {
+                                  const isFirst = sIdx === 0;
+                                  const perSeatAmount =
+                                    booking.seats.length > 0
+                                      ? booking.finalAmount / booking.seats.length
+                                      : booking.finalAmount;
+                                  return (
+                                    <tr key={`${booking.bookingId}-${sIdx}`} className="hover:bg-gray-50">
+                                      <td className="px-4 py-3">
+                                        <p className="font-medium text-gray-900">{seat.passengerName}</p>
+                                        <p className="text-xs text-gray-500">
+                                          {seat.passengerAge ?? '-'} / {seat.passengerGender ?? '-'}
+                                        </p>
+                                      </td>
+                                      <td className="px-4 py-3">
+                                        {seat.passengerPhone ? (
+                                          <a
+                                            href={`tel:${seat.passengerPhone}`}
+                                            className="text-sm text-indigo-600 hover:underline"
+                                          >
+                                            📞 {seat.passengerPhone}
+                                          </a>
+                                        ) : (
+                                          <span className="text-xs text-gray-400">-</span>
+                                        )}
+                                      </td>
+                                      <td className="px-4 py-3 text-sm text-gray-700">{booking.route}</td>
+                                      <td className="px-4 py-3">
                                         <span
-                                          key={idx}
                                           className={`px-2 py-1 rounded text-xs font-medium ${
                                             seat.level === 'LOWER'
                                               ? seat.type === 'SEATER'
@@ -484,47 +496,41 @@ const AdminBookingsReport: React.FC = () => {
                                               ? 'bg-purple-100 text-purple-800'
                                               : 'bg-orange-100 text-orange-800'
                                           }`}
-                                          title={`${seat.passengerName} (${seat.passengerAge || 'N/A'}/${seat.passengerGender || 'N/A'})`}
                                         >
                                           {seat.seatNumber} ({seat.level[0]}-{seat.type[0]})
                                         </span>
-                                      ))}
-                                    </div>
-                                  </td>
-                                  <td className="px-4 py-4 whitespace-nowrap">
-                                    <div>
-                                      <p className="font-bold text-gray-900">
-                                        {formatCurrency(booking.finalAmount)}
-                                      </p>
-                                      {booking.discount > 0 && (
-                                        <p className="text-xs text-green-600">
-                                          Discount: {formatCurrency(booking.discount)}
-                                        </p>
-                                      )}
-                                    </div>
-                                  </td>
-                                  <td className="px-4 py-4 whitespace-nowrap">
-                                    <div>
-                                      <span
-                                        className={`px-2 py-1 rounded text-xs font-medium ${
-                                          booking.paymentStatus === 'SUCCESS'
-                                            ? 'bg-green-100 text-green-800'
-                                            : booking.paymentStatus === 'PENDING'
-                                            ? 'bg-yellow-100 text-yellow-800'
-                                            : 'bg-red-100 text-red-800'
-                                        }`}
-                                      >
-                                        {booking.paymentStatus}
-                                      </span>
-                                      <p className="text-xs text-gray-500 mt-1">{booking.paymentMethod}</p>
-                                    </div>
-                                  </td>
-                                  <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                                    <p>{formatDate(booking.bookedAt).split(',')[0]}</p>
-                                    <p>{formatTime(booking.bookedAt)}</p>
-                                  </td>
-                                </tr>
-                              ))}
+                                      </td>
+                                      <td className="px-4 py-3 text-xs text-gray-600">
+                                        {booking.boardingPoint}
+                                      </td>
+                                      <td className="px-4 py-3 text-xs text-gray-600">
+                                        {booking.droppingPoint}
+                                      </td>
+                                      <td className="px-4 py-3 whitespace-nowrap text-sm font-semibold text-gray-900">
+                                        {formatCurrency(perSeatAmount)}
+                                      </td>
+                                      <td className="px-4 py-3 whitespace-nowrap">
+                                        {isFirst && (
+                                          <>
+                                            <span
+                                              className={`px-2 py-1 rounded text-xs font-medium ${
+                                                booking.paymentStatus === 'SUCCESS'
+                                                  ? 'bg-green-100 text-green-800'
+                                                  : booking.paymentStatus === 'PENDING'
+                                                  ? 'bg-yellow-100 text-yellow-800'
+                                                  : 'bg-red-100 text-red-800'
+                                              }`}
+                                            >
+                                              {booking.paymentStatus}
+                                            </span>
+                                            <p className="text-xs text-gray-500 mt-1">{booking.paymentMethod}</p>
+                                          </>
+                                        )}
+                                      </td>
+                                    </tr>
+                                  );
+                                })
+                              )}
                             </tbody>
                           </table>
                         </div>

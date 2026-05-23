@@ -37,6 +37,7 @@ type PassengerForm = {
   name: string;
   age: number;
   gender: 'MALE' | 'FEMALE' | 'OTHER';
+  phone: string;
 };
 
 export function BookingPassengerPage({ isAdmin = false }: { isAdmin?: boolean }) {
@@ -53,7 +54,7 @@ export function BookingPassengerPage({ isAdmin = false }: { isAdmin?: boolean })
   const [couponCode, setCouponCode] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState<any>(null);
   const [bookingLoading, setBookingLoading] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<PaymentGateway>('RAZORPAY');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentGateway>('ESEWA');
   const [paymentError, setPaymentError] = useState('');
   const [adminBookingResult, setAdminBookingResult] = useState<{ bookingGroupId: string; emailSent: boolean } | null>(null);
 
@@ -128,10 +129,12 @@ export function BookingPassengerPage({ isAdmin = false }: { isAdmin?: boolean })
       if (!seatExists) {
         return;
       }
+      const seat = allSeats.find((s) => s.id === seatId);
       initialPassengers[seatId] = {
         name: '',
         age: 0,
-        gender: 'MALE',
+        gender: seat?.isFemale ? 'FEMALE' : 'MALE',
+        phone: '',
       };
     });
 
@@ -228,6 +231,15 @@ export function BookingPassengerPage({ isAdmin = false }: { isAdmin?: boolean })
         alert('Please fill valid passenger details for each seat.');
         return;
       }
+      if (!passenger.phone || !/^\+?\d{7,15}$/.test(passenger.phone.trim())) {
+        alert('Please enter a valid phone number for each passenger.');
+        return;
+      }
+      const seat = allSeats.find((s) => s.id === seatId);
+      if (seat?.isFemale && passenger.gender !== 'FEMALE') {
+        alert(`Seat ${seat.seatNumber} is reserved for female passengers only.`);
+        return;
+      }
     }
 
     setPaymentError('');
@@ -239,6 +251,7 @@ export function BookingPassengerPage({ isAdmin = false }: { isAdmin?: boolean })
         name: passengers[seatId].name.trim(),
         age: passengers[seatId].age,
         gender: passengers[seatId].gender,
+        phone: passengers[seatId].phone.trim(),
       }));
 
       const bookingPayload = {
@@ -609,14 +622,20 @@ export function BookingPassengerPage({ isAdmin = false }: { isAdmin?: boolean })
             const passenger = passengers[seat.id] || {
               name: '',
               age: 0,
-              gender: 'MALE' as const,
+              gender: (seat.isFemale ? 'FEMALE' : 'MALE') as PassengerForm['gender'],
+              phone: '',
             };
 
             return (
               <div key={seat.id} className="rounded-3xl bg-white p-5 shadow-lg">
                 <div className="flex items-center justify-between">
-                  <div className="text-sm font-semibold text-gray-900">
+                  <div className="text-sm font-semibold text-gray-900 flex items-center gap-2">
                     Seat {seat.seatNumber} • {seat.level} {seat.type}
+                    {seat.isFemale && (
+                      <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-pink-100 text-pink-700 border border-pink-300">
+                        FEMALE ONLY
+                      </span>
+                    )}
                   </div>
                   <div className="text-sm font-semibold text-indigo-600">{formatDualCurrency(getSeatPrice(seat))}</div>
                 </div>
@@ -673,6 +692,7 @@ export function BookingPassengerPage({ isAdmin = false }: { isAdmin?: boolean })
                     </label>
                     <select
                       value={passenger.gender}
+                      disabled={!!seat.isFemale}
                       onChange={(event) =>
                         setPassengers((prev) => ({
                           ...prev,
@@ -682,12 +702,32 @@ export function BookingPassengerPage({ isAdmin = false }: { isAdmin?: boolean })
                           },
                         }))
                       }
-                      className="mt-2 w-full rounded-2xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+                      className="mt-2 w-full rounded-2xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 disabled:opacity-70"
                     >
                       <option value="MALE">Male</option>
                       <option value="FEMALE">Female</option>
                       <option value="OTHER">Other</option>
                     </select>
+                  </div>
+                  <div className="sm:col-span-3">
+                    <label className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                      Phone Number
+                    </label>
+                    <input
+                      type="tel"
+                      value={passenger.phone}
+                      onChange={(event) =>
+                        setPassengers((prev) => ({
+                          ...prev,
+                          [seat.id]: {
+                            ...prev[seat.id],
+                            phone: event.target.value,
+                          },
+                        }))
+                      }
+                      placeholder="Enter phone with country code (e.g. +9779812345678)"
+                      className="mt-2 w-full rounded-2xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+                    />
                   </div>
                 </div>
               </div>
@@ -741,20 +781,6 @@ export function BookingPassengerPage({ isAdmin = false }: { isAdmin?: boolean })
                 <div className="flex flex-col gap-2 sm:flex-row">
                   <button
                     type="button"
-                    onClick={() => setPaymentMethod('RAZORPAY')}
-                    className={`flex-1 flex items-center justify-between gap-2 rounded-2xl border px-4 py-3 text-sm font-medium transition-colors ${
-                      paymentMethod === 'RAZORPAY'
-                        ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                        : 'border-gray-200 hover:border-indigo-300 text-gray-700'
-                    }`}
-                  >
-                    <span className="flex items-center gap-2">
-                      <FaCreditCard /> Razorpay
-                    </span>
-                    <span className="text-[11px] text-gray-500">Pay ₹{formatAmount(convertToINR(totalAmount))}</span>
-                  </button>
-                  <button
-                    type="button"
                     onClick={() => setPaymentMethod('ESEWA')}
                     className={`flex-1 flex items-center justify-between gap-2 rounded-2xl border px-4 py-3 text-sm font-medium transition-colors ${
                       paymentMethod === 'ESEWA'
@@ -766,6 +792,20 @@ export function BookingPassengerPage({ isAdmin = false }: { isAdmin?: boolean })
                       <FaMobileAlt /> eSewa
                     </span>
                     <span className="text-[11px] text-gray-500">Pay NPR {formatAmount(totalAmount)}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMethod('RAZORPAY')}
+                    className={`flex-1 flex items-center justify-between gap-2 rounded-2xl border px-4 py-3 text-sm font-medium transition-colors ${
+                      paymentMethod === 'RAZORPAY'
+                        ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                        : 'border-gray-200 hover:border-indigo-300 text-gray-700'
+                    }`}
+                  >
+                    <span className="flex items-center gap-2">
+                      <FaCreditCard /> Razorpay
+                    </span>
+                    <span className="text-[11px] text-gray-500">Pay ₹{formatAmount(convertToINR(totalAmount))}</span>
                   </button>
                 </div>
               </div>

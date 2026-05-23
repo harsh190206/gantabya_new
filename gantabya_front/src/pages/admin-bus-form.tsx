@@ -8,7 +8,7 @@ interface BusFormData {
   busNumber: string;
   name: string;
   type: 'SEATER' | 'SLEEPER' | 'MIXED';
-  layoutType: 'TWO_TWO' | 'THREE_TWO' | 'FOUR_TWO';
+  layoutType: 'TWO_TWO' | 'THREE_TWO' | 'FOUR_TWO' | 'FOUR_FOUR';
   gridRows: number;
   gridColumns: number;
 }
@@ -191,6 +191,7 @@ const BusForm: React.FC = () => {
                 <option value="TWO_TWO">2+2 (4 seats per row)</option>
                 <option value="THREE_TWO">3+2 (5 seats per row)</option>
                 <option value="FOUR_TWO">4+2 (6 seats per row)</option>
+                <option value="FOUR_FOUR">4+4 (8 seats per row)</option>
               </select>
               <p className="text-sm text-gray-500 mt-1">
                 Standard seating configuration (excluding aisle)
@@ -224,10 +225,10 @@ const BusForm: React.FC = () => {
                   value={formData.gridColumns}
                   onChange={handleChange}
                   min="1"
-                  max="4"
+                  max="8"
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent"
                 />
-                <p className="text-xs text-gray-500 mt-1">Side to side - max 4 columns</p>
+                <p className="text-xs text-gray-500 mt-1">Side to side - max 8 columns</p>
               </div>
             </div>
 

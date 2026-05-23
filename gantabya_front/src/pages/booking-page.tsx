@@ -53,7 +53,7 @@ export function BookingPage({ isAdmin = false }: { isAdmin?: boolean }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
-  const [passengers, setPassengers] = useState<{ [seatId: string]: { name: string; age: number; gender: string } }>({});
+  const [passengers, setPassengers] = useState<{ [seatId: string]: { name: string; age: number; gender: string; phone: string } }>({});
   const [currentDeck, setCurrentDeck] = useState<'LOWER' | 'UPPER'>('LOWER');
   const [couponCode, setCouponCode] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState<any>(null);
@@ -65,7 +65,7 @@ export function BookingPage({ isAdmin = false }: { isAdmin?: boolean }) {
   const [modalStage, setModalStage] = useState<'BOARDING' | 'PASSENGER'>('BOARDING');
   const [currentSeatStep, setCurrentSeatStep] = useState(0);
   const [modalError, setModalError] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<PaymentGateway>('RAZORPAY');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentGateway>('ESEWA');
   const [selectedBoardingPointId, setSelectedBoardingPointId] = useState(
     routeState?.boardingPointId || ''
   );
@@ -240,10 +240,12 @@ export function BookingPage({ isAdmin = false }: { isAdmin?: boolean }) {
     ) {
       setSelectedSeats(routeState.selectedSeats);
       const restoredPassengers: {
-        [seatId: string]: { name: string; age: number; gender: string };
+        [seatId: string]: { name: string; age: number; gender: string; phone: string };
       } = {};
+      const allSeatsLocal = busInfo ? [...busInfo.seats.lowerDeck, ...busInfo.seats.upperDeck] : [];
       routeState.selectedSeats.forEach((seatId) => {
-        restoredPassengers[seatId] = { name: '', age: 0, gender: 'MALE' };
+        const s = allSeatsLocal.find((x) => x.id === seatId);
+        restoredPassengers[seatId] = { name: '', age: 0, gender: s?.isFemale ? 'FEMALE' : 'MALE', phone: '' };
       });
       setPassengers(restoredPassengers);
     }
@@ -265,10 +267,11 @@ export function BookingPage({ isAdmin = false }: { isAdmin?: boolean }) {
     } else {
       if (selectedSeats.length < 6) {
         setSelectedSeats([...selectedSeats, seatId]);
-        // Initialize passenger info for new seat
+        const allSeatsLocal = busInfo ? [...busInfo.seats.lowerDeck, ...busInfo.seats.upperDeck] : [];
+        const s = allSeatsLocal.find((x) => x.id === seatId);
         setPassengers({
           ...passengers,
-          [seatId]: { name: '', age: 0, gender: 'MALE' }
+          [seatId]: { name: '', age: 0, gender: s?.isFemale ? 'FEMALE' : 'MALE', phone: '' }
         });
       } else {
         alert('You can select maximum 6 seats at a time');
@@ -326,10 +329,20 @@ export function BookingPage({ isAdmin = false }: { isAdmin?: boolean }) {
       return;
     }
 
+    const allSeatsLocal = busInfo ? [...busInfo.seats.lowerDeck, ...busInfo.seats.upperDeck] : [];
     for (const seatId of selectedSeats) {
       const passenger = passengers[seatId];
       if (!passenger || !passenger.name || !passenger.age || passenger.age < 1) {
         alert('Please fill in all passenger details (name and age must be valid)');
+        return;
+      }
+      if (!passenger.phone || !/^\+?\d{7,15}$/.test(passenger.phone.trim())) {
+        alert('Please enter a valid phone number for each passenger.');
+        return;
+      }
+      const s = allSeatsLocal.find((x) => x.id === seatId);
+      if (s?.isFemale && passenger.gender !== 'FEMALE') {
+        alert(`Seat ${s.seatNumber} is reserved for female passengers only.`);
         return;
       }
     }
@@ -343,6 +356,7 @@ export function BookingPage({ isAdmin = false }: { isAdmin?: boolean }) {
         name: passengers[seatId].name,
         age: passengers[seatId].age,
         gender: passengers[seatId].gender,
+        phone: passengers[seatId].phone?.trim() || '',
       }));
 
       // Admin COD booking - use admin offline booking endpoint
@@ -705,6 +719,19 @@ export function BookingPage({ isAdmin = false }: { isAdmin?: boolean }) {
       return;
     }
 
+    if (!passenger.phone || !/^\+?\d{7,15}$/.test(passenger.phone.trim())) {
+      setModalError('Please enter a valid phone number');
+      return;
+    }
+
+    const seatDetail = busInfo
+      ? [...busInfo.seats.lowerDeck, ...busInfo.seats.upperDeck].find((s) => s.id === seatId)
+      : undefined;
+    if (seatDetail?.isFemale && passenger.gender !== 'FEMALE') {
+      setModalError(`Seat ${seatDetail.seatNumber} is reserved for female passengers only.`);
+      return;
+    }
+
     setModalError('');
 
     if (currentSeatStep < selectedSeats.length - 1) {
@@ -903,11 +930,16 @@ export function BookingPage({ isAdmin = false }: { isAdmin?: boolean }) {
                     return 'text-sm sm:text-base md:text-lg lg:text-xl';
                   };
 
+                  const femaleClasses = seat.isFemale
+                    ? 'bg-pink-100 border-pink-500 text-pink-700 hover:border-pink-600 hover:bg-pink-200'
+                    : 'bg-white border-gray-300 hover:border-indigo-500 hover:bg-indigo-50 hover:shadow-md';
+
                   return (
                     <button
                       key={seat.id}
                       onClick={() => handleSeatClick(seat.id, isAvailable)}
                       disabled={!isAvailable}
+                      title={seat.isFemale ? 'Female-only seat — assign only to female passenger' : undefined}
                       style={{
                         gridRow: `${seat.row + 1} / span ${seat.rowSpan}`,
                         gridColumn: `${seat.column + 1} / span ${seat.columnSpan}`,
@@ -921,14 +953,18 @@ export function BookingPage({ isAdmin = false }: { isAdmin?: boolean }) {
                           isSelected
                             ? 'bg-green-500 border-green-600 text-white scale-105 shadow-lg z-10'
                             : isAvailable
-                            ? 'bg-white border-gray-300 hover:border-indigo-500 hover:bg-indigo-50 hover:shadow-md'
+                            ? femaleClasses
                             : 'bg-red-400 border-red-500 text-white cursor-not-allowed opacity-75'
                         }
                       `}
                     >
                       {seat.type === 'SLEEPER' ? (
                         <>
-                          <FaBed className={`${getBedIconClass()} mb-0.5`} />
+                          {seat.isFemale ? (
+                            <FaFemale className={`${getBedIconClass()} mb-0.5 text-pink-600`} />
+                          ) : (
+                            <FaBed className={`${getBedIconClass()} mb-0.5`} />
+                          )}
                           {isCoupeSeat && (
                             <div className="flex items-center gap-0.5 text-[8px] sm:text-[10px]">
                               <FaMale className="text-blue-500" />
@@ -936,10 +972,14 @@ export function BookingPage({ isAdmin = false }: { isAdmin?: boolean }) {
                             </div>
                           )}
                         </>
+                      ) : seat.isFemale ? (
+                        <FaFemale className="text-sm sm:text-base md:text-lg lg:text-xl mb-0.5 text-pink-600" />
                       ) : (
                         <FaChair className="text-sm sm:text-base md:text-lg lg:text-xl mb-0.5" />
                       )}
-                      <span className="text-[0.55rem] sm:text-[10px] md:text-xs font-semibold">{seat.seatNumber}</span>
+                      <span className="text-[0.55rem] sm:text-[10px] md:text-xs font-semibold">
+                        {seat.isFemale ? `F-${seat.seatNumber}` : seat.seatNumber}
+                      </span>
                     </button>
                   );
                 })}
@@ -1365,6 +1405,13 @@ export function BookingPage({ isAdmin = false }: { isAdmin?: boolean }) {
                       <div className="h-7 w-7 rounded border-2 border-red-500 bg-red-400"></div>
                       <span>Booked</span>
                     </div>
+                    <div className="flex items-center gap-2">
+                      <div className="h-7 w-7 rounded border-2 border-pink-500 bg-pink-200 flex items-center justify-center text-pink-700 text-[10px] font-bold">F</div>
+                      <span>Female Only</span>
+                    </div>
+                  </div>
+                  <div className="mt-2 text-[10px] text-pink-700 bg-pink-50 rounded p-2">
+                    Pink seats marked "F" are reserved for female passengers only.
                   </div>
                 </div>
 
@@ -1576,20 +1623,6 @@ export function BookingPage({ isAdmin = false }: { isAdmin?: boolean }) {
                       <div className="space-y-2">
                         <button
                           type="button"
-                          onClick={() => setPaymentMethod('RAZORPAY')}
-                          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg border transition-colors ${
-                            paymentMethod === 'RAZORPAY'
-                              ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                              : 'border-gray-200 hover:border-indigo-300 text-gray-700'
-                          }`}
-                        >
-                          <span className="flex items-center gap-2 text-sm sm:text-base font-medium">
-                            <FaCreditCard className="hidden sm:block" /> Razorpay
-                          </span>
-                          <span className="text-xs text-gray-500">Pay ₹{formatAmount(convertToINR(totalAmountValue))}</span>
-                        </button>
-                        <button
-                          type="button"
                           onClick={() => setPaymentMethod('ESEWA')}
                           className={`w-full flex items-center justify-between px-3 py-2 rounded-lg border transition-colors ${
                             paymentMethod === 'ESEWA'
@@ -1601,6 +1634,20 @@ export function BookingPage({ isAdmin = false }: { isAdmin?: boolean }) {
                             <FaMobileAlt className="hidden sm:block" /> eSewa
                           </span>
                           <span className="text-xs text-gray-500">Pay NPR {formatAmount(totalAmountValue)}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPaymentMethod('RAZORPAY')}
+                          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg border transition-colors ${
+                            paymentMethod === 'RAZORPAY'
+                              ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                              : 'border-gray-200 hover:border-indigo-300 text-gray-700'
+                          }`}
+                        >
+                          <span className="flex items-center gap-2 text-sm sm:text-base font-medium">
+                            <FaCreditCard className="hidden sm:block" /> Razorpay
+                          </span>
+                          <span className="text-xs text-gray-500">Pay ₹{formatAmount(convertToINR(totalAmountValue))}</span>
                         </button>
                       </div>
                     </div>
@@ -1864,8 +1911,13 @@ export function BookingPage({ isAdmin = false }: { isAdmin?: boolean }) {
                   <div className="flex flex-wrap items-center justify-between gap-4">
                     <div>
                       <div className="text-sm text-gray-500">Seat</div>
-                      <div className="text-lg font-semibold text-gray-900">
+                      <div className="text-lg font-semibold text-gray-900 flex items-center gap-2">
                         {currentSeatDetails ? currentSeatDetails.seatNumber : 'N/A'}
+                        {currentSeatDetails?.isFemale && (
+                          <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-pink-100 text-pink-700 border border-pink-300">
+                            FEMALE ONLY
+                          </span>
+                        )}
                       </div>
                     </div>
                     <div className="text-sm text-gray-500">
@@ -1889,7 +1941,8 @@ export function BookingPage({ isAdmin = false }: { isAdmin?: boolean }) {
                             [currentSeatId]: {
                               name: value,
                               age: prev[currentSeatId]?.age || 0,
-                              gender: prev[currentSeatId]?.gender || 'MALE',
+                              gender: prev[currentSeatId]?.gender || (currentSeatDetails?.isFemale ? 'FEMALE' : 'MALE'),
+                              phone: prev[currentSeatId]?.phone || '',
                             },
                           }));
                         }}
@@ -1916,7 +1969,8 @@ export function BookingPage({ isAdmin = false }: { isAdmin?: boolean }) {
                               [currentSeatId]: {
                                 name: prev[currentSeatId]?.name || '',
                                 age: value,
-                                gender: prev[currentSeatId]?.gender || 'MALE',
+                                gender: prev[currentSeatId]?.gender || (currentSeatDetails?.isFemale ? 'FEMALE' : 'MALE'),
+                                phone: prev[currentSeatId]?.phone || '',
                               },
                             }));
                           }}
@@ -1929,7 +1983,8 @@ export function BookingPage({ isAdmin = false }: { isAdmin?: boolean }) {
                           Gender
                         </label>
                         <select
-                          value={currentPassengerDetails?.gender || 'MALE'}
+                          value={currentPassengerDetails?.gender || (currentSeatDetails?.isFemale ? 'FEMALE' : 'MALE')}
+                          disabled={!!currentSeatDetails?.isFemale}
                           onChange={(e) => {
                             if (!currentSeatId) return;
                             const value = e.target.value as 'MALE' | 'FEMALE' | 'OTHER';
@@ -1939,16 +1994,41 @@ export function BookingPage({ isAdmin = false }: { isAdmin?: boolean }) {
                                 name: prev[currentSeatId]?.name || '',
                                 age: prev[currentSeatId]?.age || 0,
                                 gender: value,
+                                phone: prev[currentSeatId]?.phone || '',
                               },
                             }));
                           }}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 disabled:opacity-70"
                         >
                           <option value="MALE">Male</option>
                           <option value="FEMALE">Female</option>
                           <option value="OTHER">Other</option>
                         </select>
                       </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Phone Number <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="tel"
+                        value={currentPassengerDetails?.phone || ''}
+                        onChange={(e) => {
+                          if (!currentSeatId) return;
+                          const value = e.target.value;
+                          setPassengers((prev) => ({
+                            ...prev,
+                            [currentSeatId]: {
+                              name: prev[currentSeatId]?.name || '',
+                              age: prev[currentSeatId]?.age || 0,
+                              gender: prev[currentSeatId]?.gender || (currentSeatDetails?.isFemale ? 'FEMALE' : 'MALE'),
+                              phone: value,
+                            },
+                          }));
+                        }}
+                        placeholder="Enter phone with country code (e.g. +9779812345678)"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                      />
                     </div>
                   </div>
                 </div>

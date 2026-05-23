@@ -12,6 +12,7 @@ export interface Seat {
   type: SeatType;
   level: SeatLevel;
   isAvailable: boolean;
+  isFemale?: boolean;
 }
 
 export interface StopPointOption {
