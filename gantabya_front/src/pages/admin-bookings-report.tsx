@@ -148,13 +148,6 @@ const AdminBookingsReport: React.FC = () => {
     return `${dual.ad} (${dual.bs})`;
   };
 
-  const formatTime = (dateString: string) => {
-    return new Date(dateString).toLocaleTimeString('en-IN', {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
-
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-NP', {
       style: 'currency',
